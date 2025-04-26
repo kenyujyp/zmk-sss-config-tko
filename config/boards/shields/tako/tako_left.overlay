@@ -1,0 +1,79 @@
+/*
+ * Copyright (c) 2023 ssbb
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+#include "tako.dtsi"
+
+/ {
+  chosen {
+    zmk,kscan = &kscan;
+  };
+
+  kscan: kscan {
+    compatible = "zmk,kscan-gpio-ec";
+    label = "KSCAN";
+
+    row-gpios
+    = <&gpio0 13 GPIO_ACTIVE_HIGH>
+    , <&gpio0 24 GPIO_ACTIVE_HIGH>
+    , <&gpio0 3 GPIO_ACTIVE_HIGH>
+    , <&gpio1 6 GPIO_ACTIVE_HIGH>
+    , <&gpio1 11 GPIO_ACTIVE_HIGH>
+    ;
+
+    // mux select gpios for selecting which col channel to scan
+    mux-sel-gpios
+    = <&gpio0 29 GPIO_ACTIVE_HIGH>
+    , <&gpio0 30 GPIO_ACTIVE_HIGH>
+    , <&gpio0 31 GPIO_ACTIVE_HIGH>
+    ;
+
+    /* 2 multiplexer enable pins in col number ascending order */
+    mux0-en-gpios = <&gpio1 9 GPIO_ACTIVE_HIGH>;
+
+    mux1-en-gpios = <&gpio1 10 GPIO_ACTIVE_HIGH>;
+
+    discharge-gpios = <&gpio0 2 GPIO_ACTIVE_HIGH>;
+
+    /* 2 multiplexer pin number mapping to all channels from #0-14 */
+    col-channels = <0 3 1 2 5 4 7 6 0 3 1 2 5 7>;
+
+    io-channels = <&adc 1>;
+    power-gpios = <&gpio1 13 GPIO_ACTIVE_HIGH>;
+    /* mask unused position in each row */
+    strobe-input-masks = <(BIT(13)) 0 (BIT(13)) (BIT(11)) (BIT(3) + BIT(5) + BIT(6) + BIT(7) + BIT(9) + BIT(10) + BIT(11) + BIT(12) + BIT(13))>;
+  };
+};
+
+&adc {
+    status = "okay";
+
+    #address-cells = <1>;
+    #size-cells = <0>;
+
+    /* battery sensing
+     * channel@3 {
+     *   reg = <3>;
+     *   zephyr,gain = "ADC_GAIN_1_6";
+     *   zephyr,reference = "ADC_REF_INTERNAL";
+     *   zephyr,acquisition-time = <ADC_ACQ_TIME(ADC_ACQ_TIME_MICROSECONDS, 40)>;
+     *   zephyr,resolution = <12>;
+     * };
+     */
+
+    /* ec read */
+    channel@1 {
+        reg = <1>;
+        zephyr,gain = "ADC_GAIN_1_6";
+        zephyr,reference = "ADC_REF_INTERNAL";
+        zephyr,acquisition-time = <ADC_ACQ_TIME(ADC_ACQ_TIME_MICROSECONDS, 10)>;
+        zephyr,resolution = <12>;
+        zephyr,input-positive = <NRF_SAADC_AIN0>; /* P0.02 */
+    };
+};
+
+// &nice_view_spi {
+//     cs-gpios = <&pro_micro 7 GPIO_ACTIVE_HIGH>;
+// };

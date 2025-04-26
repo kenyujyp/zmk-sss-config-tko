@@ -1,0 +1,9 @@
+file_format: "1"
+id: tako
+name: Tako
+type: shield
+# requires: [pro_micro]  /* not sure if needed needed*/
+url: none
+features:
+  - keys
+  #- studio

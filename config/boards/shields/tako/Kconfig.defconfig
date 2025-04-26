@@ -1,0 +1,24 @@
+if SHIELD_TAKO_LEFT
+
+config ZMK_KEYBOARD_NAME
+  default "Tako"
+
+endif
+
+if SHIELD_TAKO_LEFT || SHIELD_TAKO_RIGHT
+
+config ZMK_SPLIT
+  default n
+
+config I2C
+    default n
+
+endif
+
+if ZMK_BATTERY_REPORTING
+
+choice ZMK_BATTERY_REPORTING_FETCH_MODE
+	default ZMK_BATTERY_REPORTING_FETCH_MODE_LITHIUM_VOLTAGE
+endchoice
+
+endif
