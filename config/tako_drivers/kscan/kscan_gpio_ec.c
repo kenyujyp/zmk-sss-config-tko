@@ -230,9 +230,10 @@ static void kscan_ec_work_handler(struct k_work *work) {
       printk("\n");
     }
     printk("\n\n");
-  */
-   //LOG_DBG("Matrix state: %d,%d = %d", r, c, matrix_read[index]);
+   
   }
+  */
+  //LOG_DBG("Matrix state: %d,%d = %d", r, c, matrix_read[index]);
 
   /* Handle matrix reads */
   for (int r = 0; r < config->rows; r++) {
