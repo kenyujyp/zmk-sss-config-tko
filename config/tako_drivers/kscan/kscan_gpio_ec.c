@@ -169,7 +169,7 @@ static void kscan_ec_work_handler(struct k_work *work) {
       gpio_pin_set_dt(&config->mux_sels.gpios[0].spec, ch & (1 << 0));
       gpio_pin_set_dt(&config->mux_sels.gpios[1].spec, ch & (1 << 1));
       gpio_pin_set_dt(&config->mux_sels.gpios[2].spec, ch & (1 << 2));
-      gpio_pin_set_dt(&config->mux0_en.spec, 0);  // disable mux?
+      // gpio_pin_set_dt(&config->mux0_en.spec, 0);  // disable mux?
     } else {
       gpio_pin_set_dt(&config->mux1_en.spec, 1);
       /* what about the other muxtiplexer? */
@@ -178,19 +178,20 @@ static void kscan_ec_work_handler(struct k_work *work) {
       gpio_pin_set_dt(&config->mux_sels.gpios[0].spec, ch & (1 << 0));
       gpio_pin_set_dt(&config->mux_sels.gpios[1].spec, ch & (1 << 1));
       gpio_pin_set_dt(&config->mux_sels.gpios[2].spec, ch & (1 << 2));
-      gpio_pin_set_dt(&config->mux1_en.spec, 0);  // disable mux?
+      // gpio_pin_set_dt(&config->mux1_en.spec, 0);  // disable mux?
     }
 
     for (int row = 0; row < config->rows; row++) {
 
       /* skip unused column */
       if (config->strobe_input_masks && (config->strobe_input_masks[row] & BIT(col)) != 0) {
+        /* increase matrix_index offset by 1 */
         matrix_index_offset++;
         continue;
       }
       const int index = state_index_rc(config, row, col) + matrix_index_offset;
 
-      /* pull low current row pin to trigger sensing? */
+      /* disable current row first */
       gpio_pin_set_dt(&config->direct.gpios[row].spec, 0);
 
       // --- LOCK ---
@@ -216,6 +217,9 @@ static void kscan_ec_work_handler(struct k_work *work) {
       gpio_pin_configure_dt(&config->discharge.spec, GPIO_OUTPUT);
       WAIT_DISCHARGE();
     }
+
+    gpio_pin_set_dt(&config->mux0_en.spec, 0);
+    gpio_pin_set_dt(&config->mux1_en.spec, 0);
   }
 
   /* Power off */
@@ -383,8 +387,8 @@ static const struct kscan_driver_api kscan_ec_api = {
       .matrix_warm_up_ms = DT_INST_PROP(n, matrix_warm_up_ms),     \
       .matrix_relax_us = DT_INST_PROP(n, matrix_relax_us),     \
       .adc_read_settle_us = DT_INST_PROP(n, adc_read_settle_us),     \
-      COND_CODE_1(DT_INST_NODE_HAS_PROP(n, strobe_input_masks),                \
-                    (.strobe_input_masks = strobe_input_masks_##n, ), ())      \
+      COND_CODE_1(DT_INST_NODE_HAS_PROP(0, strobe_input_masks),       \
+        (.strobe_input_masks = DT_INST_PROP(0, strobe_input_masks), ), ())      \
       .col_channels = DT_INST_PROP(n, col_channels),                           \
       .rows = INST_ROWS_LEN(n),                                                \
       .cols = INST_COL_CHANNELS_LEN(n),                                        \

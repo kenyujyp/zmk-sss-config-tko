@@ -45,7 +45,7 @@ properties:
     default: 5
   active-polling-interval-ms:
     type: int
-    default: 3
+    default: 15
     description: Time between reads in milliseconds.
   idle-polling-interval-ms:
     type: int
