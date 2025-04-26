@@ -158,6 +158,9 @@ static void kscan_ec_work_handler(struct k_work *work) {
   k_sleep(K_MSEC(config->matrix_warm_up_ms));
 
   for (int col = 0; col < config->cols; col++) {
+
+    gpio_pin_set_dt(&config->mux0_en.spec, 0);
+    gpio_pin_set_dt(&config->mux1_en.spec, 0);
     uint8_t ch = config->col_channels[col];
 
     /* activate mux based on column index (e.g., first 8 columns use mux0_en) */
@@ -217,9 +220,6 @@ static void kscan_ec_work_handler(struct k_work *work) {
       gpio_pin_configure_dt(&config->discharge.spec, GPIO_OUTPUT);
       WAIT_DISCHARGE();
     }
-
-    gpio_pin_set_dt(&config->mux0_en.spec, 0);
-    gpio_pin_set_dt(&config->mux1_en.spec, 0);
   }
 
   /* Power off */
