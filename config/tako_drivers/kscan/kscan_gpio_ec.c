@@ -17,8 +17,8 @@
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
-#define WAIT_DISCHARGE()  /* empty function, time to execute very short, maybe use ksleep us? */
-#define WAIT_CHARGE()
+#define WAIT_DISCHARGE() k_busy_wait(config->matrix_relax_us)
+#define WAIT_CHARGE() k_busy_wait(config->adc_read_settle_us)
 
 #define DT_DRV_COMPAT zmk_kscan_gpio_ec
 
@@ -33,25 +33,6 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 #define INST_MATRIX_LEN(n) (INST_ROWS_LEN(n) * INST_COL_CHANNELS_LEN(n))
 
-// clang-format off
-#if IS_ENABLED(CONFIG_SHIELD_TAKO_LEFT)
-
-/* threshold data need full matrix index, NOT usable index */
-const uint16_t actuation_threshold[] = {
-    650, 650, 650, 650, 650,
-    650, 650, 650, 650, 650,
-    650, 650, 650, 650, 650,
-    650, 650, 650, 650, 650,
-};
-
-const uint16_t release_threshold[] = {
-    600, 600, 600, 600, 600,
-    600, 600, 600, 600, 600,
-    600, 600, 600, 600, 600,
-    600, 600, 600, 600, 600,
-};
-#endif
-// clang-format on
 
 struct kscan_ec_data {
   const struct device *dev;
@@ -75,6 +56,9 @@ struct kscan_ec_config {
 
   size_t rows;
   size_t cols;
+
+  uint16_t actuation_threshold;
+  uint16_t release_threshold;
 
   const uint16_t active_polling_interval_ms;
   const uint16_t idle_polling_interval_ms;
@@ -138,7 +122,8 @@ static int kscan_ec_disable(const struct device *dev) {
 static void kscan_ec_timer_handler(struct k_timer *timer) {
   struct kscan_ec_data *data =
       CONTAINER_OF(timer, struct kscan_ec_data, work_timer);
-  k_work_submit(&data->work);
+  /* concurrency problem? */
+  k_work_submit_to_queue(&system_workq, &data->work);
 }
 
 static void kscan_ec_work_handler(struct k_work *work) {
@@ -165,8 +150,6 @@ static void kscan_ec_work_handler(struct k_work *work) {
     /* activate mux based on column index (e.g., first 8 columns use mux0_en) */
     if (col < 8){
       gpio_pin_set_dt(&config->mux0_en.spec, 1);
-      /* what about the other muxtiplexer? */
-      // gpio_pin_set_dt(&config->mux1_en.spec, 0);
       /* MUX channel select */
       gpio_pin_set_dt(&config->mux_sels.gpios[0].spec, ch & (1 << 0));
       gpio_pin_set_dt(&config->mux_sels.gpios[1].spec, ch & (1 << 1));
@@ -174,8 +157,6 @@ static void kscan_ec_work_handler(struct k_work *work) {
       // gpio_pin_set_dt(&config->mux0_en.spec, 0);  // disable mux?
     } else {
       gpio_pin_set_dt(&config->mux1_en.spec, 1);
-      /* what about the other muxtiplexer? */
-      // gpio_pin_set_dt(&config->mux0_en.spec, 0);
       /* MUX channel select */
       gpio_pin_set_dt(&config->mux_sels.gpios[0].spec, ch & (1 << 0));
       gpio_pin_set_dt(&config->mux_sels.gpios[1].spec, ch & (1 << 1));
@@ -187,8 +168,6 @@ static void kscan_ec_work_handler(struct k_work *work) {
 
       /* skip unused column */
       if (config->strobe_input_masks && (config->strobe_input_masks[row] & BIT(col)) != 0) {
-        /* increase matrix_index offset by 1 */
-        matrix_index_offset++;
         continue;
       }
       const int index = state_index_rc(config, row, col);
@@ -235,7 +214,7 @@ static void kscan_ec_work_handler(struct k_work *work) {
     gpio_pin_set_dt(&config->mux_sels.gpios[i].spec, 0);
   }
 
-  /* Print matrix reads */
+  /* Print matrix reads
   static int cnt = 0;
   if (cnt++ >= (300 / config->active_polling_interval_ms)) {
     cnt = 0;
@@ -251,6 +230,8 @@ static void kscan_ec_work_handler(struct k_work *work) {
       printk("\n");
     }
     printk("\n\n");
+  */
+   //LOG_DBG("Matrix state: %d,%d = %d", r, c, matrix_read[index]);
   }
 
   /* Handle matrix reads */
@@ -259,10 +240,10 @@ static void kscan_ec_work_handler(struct k_work *work) {
       const int index = state_index_rc(config, r, c);
       const bool pressed = data->matrix_state[index];
 
-      if (!pressed && matrix_read[index] > actuation_threshold[index]) {
+      if (!pressed && matrix_read[index] > actuation_threshold) {
         data->matrix_state[index] = true;
         data->callback(data->dev, r, c, true);
-      } else if (pressed && matrix_read[index] < release_threshold[index]) {
+      } else if (pressed && matrix_read[index] < release_threshold) {
         data->matrix_state[index] = false;
         data->callback(data->dev, r, c, false);
       }
@@ -393,6 +374,8 @@ static const struct kscan_driver_api kscan_ec_api = {
       .rows = INST_ROWS_LEN(n),                                                \
       .cols = INST_COL_CHANNELS_LEN(n),                                        \
       .adc_channel = ADC_DT_SPEC_INST_GET(n),                                  \
+      .actuation_threshold = DT_INST_PROP(n, actuation_threshold),             \
+      .release_threshold = DT_INST_PROP(n, release_threshold),                 \
   };                                                                           \
   static int kscan_ec_activity_event_handler_wrapper##n(                       \
       const zmk_event_t *eh) {                                                 \

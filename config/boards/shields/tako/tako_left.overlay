@@ -42,8 +42,12 @@
 
     io-channels = <&adc 1>;
     power-gpios = <&gpio1 13 GPIO_ACTIVE_HIGH>;
+
     /* mask unused position in each row */
     strobe-input-masks = <(BIT(13)) 0 (BIT(13)) (BIT(11)) (BIT(3) + BIT(5) + BIT(6) + BIT(7) + BIT(9) + BIT(10) + BIT(11) + BIT(12) + BIT(13))>;
+
+    actuation-threshold = 650;
+    release-threshold = 600;
   };
 
   // Instance 0: ADC for battery sensor

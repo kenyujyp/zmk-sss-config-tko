@@ -56,4 +56,10 @@ properties:
   strobe-input-masks:
     type: array
     required: true
+  actuation-threshold:
+    type: int
+    required: true
+  release-threshold:
+    type: int
+    required: true
 
