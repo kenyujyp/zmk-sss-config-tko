@@ -241,10 +241,10 @@ static void kscan_ec_work_handler(struct k_work *work) {
       const int index = state_index_rc(config, r, c);
       const bool pressed = data->matrix_state[index];
 
-      if (!pressed && matrix_read[index] > actuation_threshold) {
+      if (!pressed && matrix_read[index] > config->actuation_threshold) {
         data->matrix_state[index] = true;
         data->callback(data->dev, r, c, true);
-      } else if (pressed && matrix_read[index] < release_threshold) {
+      } else if (pressed && matrix_read[index] < config->release_threshold) {
         data->matrix_state[index] = false;
         data->callback(data->dev, r, c, false);
       }
