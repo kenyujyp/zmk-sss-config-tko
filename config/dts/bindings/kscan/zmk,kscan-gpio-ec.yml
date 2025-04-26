@@ -53,3 +53,7 @@ properties:
   sleep-polling-interval-ms:
     type: int
     default: 3000
+  strobe-input-masks:
+    type: array
+    required: true
+
