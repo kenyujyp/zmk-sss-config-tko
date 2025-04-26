@@ -36,7 +36,7 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 // clang-format off
 #if IS_ENABLED(CONFIG_SHIELD_TAKO_LEFT)
 
-/* LEFT HAND this may cause problem, split keyboard */
+/* threshold data need full matrix index, NOT usable index */
 const uint16_t actuation_threshold[] = {
     650, 650, 650, 650, 650,
     650, 650, 650, 650, 650,
@@ -147,7 +147,6 @@ static void kscan_ec_work_handler(struct k_work *work) {
   struct adc_sequence *adc_seq = &data->adc_seq;
 
   int rc;
-  int matrix_index_offset = 0;
 
   int16_t matrix_read[config->rows * config->cols];
 
@@ -192,7 +191,7 @@ static void kscan_ec_work_handler(struct k_work *work) {
         matrix_index_offset++;
         continue;
       }
-      const int index = state_index_rc(config, row, col) + matrix_index_offset;
+      const int index = state_index_rc(config, row, col);
 
       /* disable current row first */
       gpio_pin_set_dt(&config->direct.gpios[row].spec, 0);
@@ -200,8 +199,9 @@ static void kscan_ec_work_handler(struct k_work *work) {
       // --- LOCK ---
       const unsigned int lock = irq_lock();
       gpio_pin_configure_dt(&config->discharge.spec, GPIO_INPUT);
+      /* charge */
       gpio_pin_set_dt(&config->direct.gpios[row].spec, 1);
-
+      /* need further tweaking the charge timing */
       WAIT_CHARGE();
 
       rc = adc_read(config->adc_channel.dev, adc_seq);
@@ -387,8 +387,8 @@ static const struct kscan_driver_api kscan_ec_api = {
       .matrix_warm_up_ms = DT_INST_PROP(n, matrix_warm_up_ms),     \
       .matrix_relax_us = DT_INST_PROP(n, matrix_relax_us),     \
       .adc_read_settle_us = DT_INST_PROP(n, adc_read_settle_us),     \
-      COND_CODE_1(DT_INST_NODE_HAS_PROP(0, strobe_input_masks),       \
-        (.strobe_input_masks = DT_INST_PROP(0, strobe_input_masks), ), ())      \
+      COND_CODE_1(DT_INST_NODE_HAS_PROP(n, strobe_input_masks),       \
+        (.strobe_input_masks = DT_INST_PROP(n, strobe_input_masks), ), ())      \
       .col_channels = DT_INST_PROP(n, col_channels),                           \
       .rows = INST_ROWS_LEN(n),                                                \
       .cols = INST_COL_CHANNELS_LEN(n),                                        \
