@@ -123,7 +123,7 @@ static void kscan_ec_timer_handler(struct k_timer *timer) {
   struct kscan_ec_data *data =
       CONTAINER_OF(timer, struct kscan_ec_data, work_timer);
   /* concurrency problem? */
-  k_work_submit_to_queue(&system_workq, &data->work);
+  k_work_submit(&data->work); // Submit to system work queue
 }
 
 static void kscan_ec_work_handler(struct k_work *work) {
