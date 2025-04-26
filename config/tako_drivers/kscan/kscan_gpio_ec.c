@@ -155,7 +155,7 @@ static void kscan_ec_work_handler(struct k_work *work) {
   gpio_pin_set_dt(&config->power.spec, 1);
 
   /* The board needs some time to be operational after powering up */
-  k_sleep(K_MSEC(config->matrix_warm_up_us));
+  k_sleep(K_MSEC(config->matrix_warm_up_ms));
 
   for (int col = 0; col < config->cols; col++) {
     uint8_t ch = config->col_channels[col];
