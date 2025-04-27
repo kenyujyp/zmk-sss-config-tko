@@ -67,7 +67,7 @@ struct kscan_ec_config {
   const uint16_t matrix_relax_us;
   const uint16_t adc_read_settle_us;
 
-  const uint32_t strobe_input_masks[];
+  const uint32_t strobe_input_masks[5];
 
   uint16_t col_channels[];
 };
