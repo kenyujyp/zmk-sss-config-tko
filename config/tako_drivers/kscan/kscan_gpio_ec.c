@@ -142,26 +142,27 @@ static void kscan_ec_work_handler(struct k_work *work) {
   k_sleep(K_MSEC(config->matrix_warm_up_ms));
 
   for (int col = 0; col < config->cols; col++) {
-
-    gpio_pin_set_dt(&config->mux0_en.spec, 0);
-    gpio_pin_set_dt(&config->mux1_en.spec, 0);
+    /* this should be find out if this is enabling or diabling, should disable all muxs first */
+    gpio_pin_set_dt(&config->mux0_en.spec, 1);
+    gpio_pin_set_dt(&config->mux1_en.spec, 1);
     uint8_t ch = config->col_channels[col];
 
     /* activate mux based on column index (e.g., first 8 columns use mux0_en) */
     if (col < 8){
+      /* this maybe disable mux pin ??? */
       gpio_pin_set_dt(&config->mux0_en.spec, 1);
       /* MUX channel select */
-      gpio_pin_set_dt(&config->mux_sels.gpios[0].spec, ch & (1 << 0));
-      gpio_pin_set_dt(&config->mux_sels.gpios[1].spec, ch & (1 << 1));
-      gpio_pin_set_dt(&config->mux_sels.gpios[2].spec, ch & (1 << 2));
-      // gpio_pin_set_dt(&config->mux0_en.spec, 0);  // disable mux?
+      for (int i = 0; i < config->mux_sels.len; i++) {
+        gpio_pin_set_dt(&config->mux_sels.gpios[i].spec, (ch & (1 << i)) >> i);
+      }
+      gpio_pin_set_dt(&config->mux0_en.spec, 0);  // enable mux pin? this from original code
     } else {
       gpio_pin_set_dt(&config->mux1_en.spec, 1);
       /* MUX channel select */
-      gpio_pin_set_dt(&config->mux_sels.gpios[0].spec, ch & (1 << 0));
-      gpio_pin_set_dt(&config->mux_sels.gpios[1].spec, ch & (1 << 1));
-      gpio_pin_set_dt(&config->mux_sels.gpios[2].spec, ch & (1 << 2));
-      // gpio_pin_set_dt(&config->mux1_en.spec, 0);  // disable mux?
+      for (int i = 0; i < config->mux_sels.len; i++) {
+        gpio_pin_set_dt(&config->mux_sels.gpios[i].spec, (ch & (1 << i)) >> i);
+      }
+      gpio_pin_set_dt(&config->mux1_en.spec, 0);  // enable mux pin? this from original code
     }
 
     for (int row = 0; row < config->rows; row++) {
@@ -172,18 +173,29 @@ static void kscan_ec_work_handler(struct k_work *work) {
       }
       const int index = state_index_rc(config, row, col);
 
+      /* disable unused rows to prevent ghosting */
+      for (int r = 0; r < config->rows; r++){
+        if (r != row) {
+          gpio_pin_set_dt(&config->direct.gpios[r].spec, 0);
+        }
+      }
+  
       /* disable current row first */
       gpio_pin_set_dt(&config->direct.gpios[row].spec, 0);
 
       // --- LOCK ---
       const unsigned int lock = irq_lock();
+      /* set discharge pin to input high impediance */
       gpio_pin_configure_dt(&config->discharge.spec, GPIO_INPUT);
       /* charge */
       gpio_pin_set_dt(&config->direct.gpios[row].spec, 1);
       /* need further tweaking the charge timing */
       WAIT_CHARGE();
 
+      /* ADC Value = (Vin​ * gain / Vref​) * (2^(adc_resolution)−1) */
+      /* ADC driver reads the analog value and writes it into the buffer specified in adc_seq->buffer (i.e., data->adc_raw) */
       rc = adc_read(config->adc_channel.dev, adc_seq);
+      /* skip adc calibration for subsequent read */
       adc_seq->calibrate = false;
 
       if (rc == 0) {
@@ -195,7 +207,9 @@ static void kscan_ec_work_handler(struct k_work *work) {
       irq_unlock(lock);
       // -- END LOCK --
 
+      /* drives the discharge pin to a LOW voltage */
       gpio_pin_set_dt(&config->discharge.spec, 0);
+      /* set discharge pin to GPIO_OUTPUT to sink current, discharge mode */
       gpio_pin_configure_dt(&config->discharge.spec, GPIO_OUTPUT);
       WAIT_DISCHARGE();
     }
@@ -253,56 +267,56 @@ static void kscan_ec_work_handler(struct k_work *work) {
 }
 
 static int kscan_ec_init(const struct device *dev) {
-  LOG_DBG("KSCAN EC init");
+    LOG_DBG("KSCAN EC init");
 
-  struct kscan_ec_data *data = dev->data;
-  const struct kscan_ec_config *config = dev->config;
+    struct kscan_ec_data *data = dev->data;
+    const struct kscan_ec_config *config = dev->config;
 
-  int rc = 0;
+    int rc = 0;
 
-  LOG_WRN("EC Channel: %d", config->adc_channel.channel_cfg.channel_id);
-  LOG_WRN("EC Channel 2: %d", config->adc_channel.channel_id);
+    LOG_WRN("EC Channel: %d", config->adc_channel.channel_cfg.channel_id);
+    LOG_WRN("EC Channel 2: %d", config->adc_channel.channel_id);
 
-  gpio_pin_configure_dt(&config->power.spec, GPIO_OUTPUT_INACTIVE);
+    gpio_pin_configure_dt(&config->power.spec, GPIO_OUTPUT_INACTIVE);
 
-  data->dev = dev;
+    data->dev = dev;
 
-  data->adc_seq = (struct adc_sequence){
-      .buffer = &data->adc_raw,
-      .buffer_size = sizeof(data->adc_raw),
-  };
+    data->adc_seq = (struct adc_sequence){
+        .buffer = &data->adc_raw,
+        .buffer_size = sizeof(data->adc_raw),
+    };
 
-  rc = adc_channel_setup_dt(&config->adc_channel);
-  if (rc < 0) {
-    LOG_ERR("ADC channel setup error %d", rc);
-  }
+    rc = adc_channel_setup_dt(&config->adc_channel);
+    if (rc < 0) {
+      LOG_ERR("ADC channel setup error %d", rc);
+    }
 
-  rc = adc_sequence_init_dt(&config->adc_channel, &data->adc_seq);
-  if (rc < 0) {
-    LOG_ERR("ADC sequence init error %d", rc);
-  }
+    rc = adc_sequence_init_dt(&config->adc_channel, &data->adc_seq);
+    if (rc < 0) {
+      LOG_ERR("ADC sequence init error %d", rc);
+    }
 
-  gpio_pin_configure_dt(&config->discharge.spec, GPIO_OUTPUT_INACTIVE);
+    gpio_pin_configure_dt(&config->discharge.spec, GPIO_OUTPUT_INACTIVE);
 
-  // Init rows
-  for (int i = 0; i < config->direct.len; i++) {
-    gpio_pin_configure_dt(&config->direct.gpios[i].spec, GPIO_OUTPUT_INACTIVE);
-  }
+    // Init rows
+    for (int i = 0; i < config->direct.len; i++) {
+      gpio_pin_configure_dt(&config->direct.gpios[i].spec, GPIO_OUTPUT_INACTIVE);
+    }
 
-  // Init mux sel
-  for (int i = 0; i < config->mux_sels.len; i++) {
-    gpio_pin_configure_dt(&config->mux_sels.gpios[i].spec,
-                          GPIO_OUTPUT_INACTIVE);
-  }
+    // Init mux sel
+    for (int i = 0; i < config->mux_sels.len; i++) {
+      gpio_pin_configure_dt(&config->mux_sels.gpios[i].spec,
+                            GPIO_OUTPUT_INACTIVE);
+    }
 
-  // Enable mux
-  gpio_pin_configure_dt(&config->mux0_en.spec, GPIO_OUTPUT_INACTIVE);
-  gpio_pin_configure_dt(&config->mux1_en.spec, GPIO_OUTPUT_INACTIVE);
+    // Enable mux
+    gpio_pin_configure_dt(&config->mux0_en.spec, GPIO_OUTPUT_INACTIVE);
+    gpio_pin_configure_dt(&config->mux1_en.spec, GPIO_OUTPUT_INACTIVE);
 
-  k_timer_init(&data->work_timer, kscan_ec_timer_handler, NULL);
-  k_work_init(&data->work, kscan_ec_work_handler);
+    k_timer_init(&data->work_timer, kscan_ec_timer_handler, NULL);
+    k_work_init(&data->work, kscan_ec_work_handler);
 
-  return 0;
+    return 0;
 }
 
 static int kscan_ec_activity_event_handler(const struct device *dev,
